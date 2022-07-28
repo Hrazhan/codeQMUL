@@ -44,7 +44,7 @@ class TrainingArguments:
     seq_length: Optional[int] = field(default=1024, metadata={"help": "Sequence lengths used for training."})
     seed: Optional[int] = field(default=1, metadata={"help": "Training seed."})
     save_checkpoint_steps: Optional[int] = field(
-        default=100,
+        default=15360,
         metadata={"help": "Interval to save checkpoints. Measured as number of forward passes not training steps."},
     )
     resume_from_checkpoint: Optional[str] = field(
@@ -180,7 +180,7 @@ class TokenizerTrainingArguments:
     text_column: Optional[str] = field(default="content", metadata={"help": "Column containing text data to process."})
     vocab_size: Optional[int] = field(default=300_000, metadata={"help": "Number of examples to train tokenizer on."})
     n_examples: Optional[int] = field(
-        default=32768, metadata={"help": "Number of examples to train the tokenizer on."}
+        default=50257, metadata={"help": "Number of examples to train the tokenizer on."}
     )
     tokenizer_name: Optional[str] = field(default="codeqmul", metadata={"help": "Name of new tokenizer."})
     push_to_hub: Optional[bool] = field(default=True, metadata={"help": "Push saved tokenizer to the hub."})
@@ -193,7 +193,7 @@ class InitializationArguments:
     """
 
     config_name: Optional[str] = field(
-        default="gpt2", metadata={"help": "Configuration to use for model initialization."}
+        default="distilgpt2", metadata={"help": "Configuration to use for model initialization."}
     )
     tokenizer_name: Optional[str] = field(
         default="razhan/codeqmul", metadata={"help": "Tokenizer attached to model."}
