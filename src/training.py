@@ -190,137 +190,138 @@ def evaluate(args):
     return loss.item(), perplexity.item()
 
 
-# Settings
-parser = HfArgumentParser(TrainingArguments)
-args = parser.parse_args()
+def main():
+    # Settings
+    parser = HfArgumentParser(TrainingArguments)
+    args = parser.parse_args()
 
-# Accelerator
-accelerator = Accelerator(log_with=["wandb", "tensorboard"], logging_dir=f"{args.save_dir}/log")
-acc_state = {str(k): str(v) for k, v in accelerator.state.__dict__.items()}
+    # Accelerator
+    accelerator = Accelerator(log_with=["wandb", "tensorboard"], logging_dir=f"{args.save_dir}/log")
+    acc_state = {str(k): str(v) for k, v in accelerator.state.__dict__.items()}
 
-args = Namespace(**vars(args), **acc_state)
-samples_per_step = accelerator.state.num_processes * args.train_batch_size
-set_seed(args.seed)
+    args = Namespace(**vars(args), **acc_state)
+    samples_per_step = accelerator.state.num_processes * args.train_batch_size
+    set_seed(args.seed)
 
-# Clone model repository
-if accelerator.is_main_process:
-    hf_repo = Repository(args.save_dir, clone_from=args.model_ckpt)
+    # Clone model repository
+    if accelerator.is_main_process:
+        hf_repo = Repository(args.save_dir, clone_from=args.model_ckpt)
 
-# Logging
-logger, run_name = setup_logging(args)
-logger.info(accelerator.state)
+    # Logging
+    logger, run_name = setup_logging(args)
+    logger.info(accelerator.state)
 
-# Checkout new branch on repo
-if accelerator.is_main_process:
-    hf_repo.git_checkout(run_name, create_branch_ok=True)
+    # Checkout new branch on repo
+    if accelerator.is_main_process:
+        hf_repo.git_checkout(run_name, create_branch_ok=True)
 
-# Load model and tokenizer
-model = AutoModelForCausalLM.from_pretrained(args.save_dir)
-if args.gradient_checkpointing:
-    model.gradient_checkpointing_enable()
-tokenizer = AutoTokenizer.from_pretrained(args.save_dir)
+    # Load model and tokenizer
+    model = AutoModelForCausalLM.from_pretrained(args.save_dir)
+    if args.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
+    tokenizer = AutoTokenizer.from_pretrained(args.save_dir)
 
-# Load dataset and dataloader
-train_dataloader, eval_dataloader = create_dataloaders(args)
+    # Load dataset and dataloader
+    train_dataloader, eval_dataloader = create_dataloaders(args)
 
-# Prepare the optimizer and learning rate scheduler
-optimizer = AdamW(get_grouped_params(model, args), lr=args.learning_rate)
-lr_scheduler = get_scheduler(
-    name=args.lr_scheduler_type,
-    optimizer=optimizer,
-    num_warmup_steps=args.num_warmup_steps,
-    num_training_steps=args.max_train_steps,
-)
-accelerator.register_for_checkpointing(lr_scheduler)
-
-
-def get_lr():
-    return optimizer.param_groups[0]["lr"]
+    # Prepare the optimizer and learning rate scheduler
+    optimizer = AdamW(get_grouped_params(model, args), lr=args.learning_rate)
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=args.num_warmup_steps,
+        num_training_steps=args.max_train_steps,
+    )
+    accelerator.register_for_checkpointing(lr_scheduler)
 
 
-# Prepare everything with our `accelerator`.
-model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
-    model, optimizer, train_dataloader, eval_dataloader
-)
+    def get_lr():
+        return optimizer.param_groups[0]["lr"]
 
-# load in the weights and states from a previous save
-if args.resume_from_checkpoint:
-    if args.resume_from_checkpoint is not None or args.resume_from_checkpoint != "":
-        accelerator.print(f"Resumed from checkpoint: {args.resume_from_checkpoint}")
-        accelerator.load_state(args.resume_from_checkpoint)
-        path = os.path.basename(args.resume_from_checkpoint)
-    else:
-        # Get the most recent checkpoint
-        dirs = [f.name for f in os.scandir(args.save_dir) if f.is_dir() and "step" in str(f)]
-        dirs.sort(key=os.path.getctime)
-        path = dirs[-1]  # Sorts folders by date modified, most recent checkpoint is the last
-    # Extract the step of the checkpoint to continue from there
-    training_difference = os.path.splitext(path)[0]
-    resume_step = int(training_difference.replace("step_", ""))
 
-# Train model
-model.train()
-completed_steps = 0
-t_start = time.time()
-loss_tracking = 0
-for step, batch in enumerate(train_dataloader, start=1):
-    if args.resume_from_checkpoint and step < resume_step:
-        continue  # we need to skip steps until we reach the resumed step
-    loss = model(batch, labels=batch, use_cache=False).loss
-    avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
-    loss_tracking += avg_loss.item() / args.gradient_accumulation_steps
-    log_metrics(step, {"samples": step * samples_per_step, "loss_per_step/train": loss.item()})
-    loss = loss / args.gradient_accumulation_steps
-    if step % args.gradient_accumulation_steps != 0:
-        # Prevent backward from doing gradient all_reduce in every step
-        if accelerator.distributed_type == DistributedType.MULTI_GPU:
-            with model.no_sync():
+    # Prepare everything with our `accelerator`.
+    model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
+        model, optimizer, train_dataloader, eval_dataloader
+    )
+
+    # load in the weights and states from a previous save
+    if args.resume_from_checkpoint:
+        if args.resume_from_checkpoint is not None or args.resume_from_checkpoint != "":
+            accelerator.print(f"Resumed from checkpoint: {args.resume_from_checkpoint}")
+            accelerator.load_state(args.resume_from_checkpoint)
+            path = os.path.basename(args.resume_from_checkpoint)
+        else:
+            # Get the most recent checkpoint
+            dirs = [f.name for f in os.scandir(args.save_dir) if f.is_dir() and "step" in str(f)]
+            dirs.sort(key=os.path.getctime)
+            path = dirs[-1]  # Sorts folders by date modified, most recent checkpoint is the last
+        # Extract the step of the checkpoint to continue from there
+        training_difference = os.path.splitext(path)[0]
+        resume_step = int(training_difference.replace("step_", ""))
+
+    # Train model
+    model.train()
+    completed_steps = 0
+    t_start = time.time()
+    loss_tracking = 0
+    for step, batch in enumerate(train_dataloader, start=1):
+        if args.resume_from_checkpoint and step < resume_step:
+            continue  # we need to skip steps until we reach the resumed step
+        loss = model(batch, labels=batch, use_cache=False).loss
+        avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
+        loss_tracking += avg_loss.item() / args.gradient_accumulation_steps
+        log_metrics(step, {"samples": step * samples_per_step, "loss_per_step/train": loss.item()})
+        loss = loss / args.gradient_accumulation_steps
+        if step % args.gradient_accumulation_steps != 0:
+            # Prevent backward from doing gradient all_reduce in every step
+            if accelerator.distributed_type == DistributedType.MULTI_GPU:
+                with model.no_sync():
+                    accelerator.backward(loss)
+            else:
                 accelerator.backward(loss)
         else:
+            lr = get_lr()
             accelerator.backward(loss)
-    else:
-        lr = get_lr()
-        accelerator.backward(loss)
-        accelerator.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        lr_scheduler.step()
-        optimizer.zero_grad()
-        elapsed_time = time.time() - t_start
-        tflops = compute_tflops(elapsed_time, accelerator, args)
-        log_metrics(
-            step,
-            {
-                "steps": completed_steps,
-                "loss/train": loss_tracking,
-                "lr": lr,
-                "tflops": tflops,
-                "time_per_iteration": elapsed_time,
-            },
-        )
-        t_start = time.time()
-        loss_tracking = 0
-        completed_steps += 1
-    if step % args.save_checkpoint_steps == 0:
-        logger.info("Evaluating and saving model checkpoint")
-        eval_loss, perplexity = evaluate(args)
-        log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
-        accelerator.wait_for_everyone()
-        save_dir = os.path.join(args.save_dir, f"step_{step}")
-        accelerator.save_state(save_dir)
-        # if accelerator.is_main_process:
-        #     hf_repo.push_to_hub(commit_message=f"step {step}")
-        model.train()
-    if completed_steps >= args.max_train_steps:
-        break
+            accelerator.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+            elapsed_time = time.time() - t_start
+            tflops = compute_tflops(elapsed_time, accelerator, args)
+            log_metrics(
+                step,
+                {
+                    "steps": completed_steps,
+                    "loss/train": loss_tracking,
+                    "lr": lr,
+                    "tflops": tflops,
+                    "time_per_iteration": elapsed_time,
+                },
+            )
+            t_start = time.time()
+            loss_tracking = 0
+            completed_steps += 1
+        if step % args.save_checkpoint_steps == 0:
+            logger.info("Evaluating and saving model checkpoint")
+            eval_loss, perplexity = evaluate(args)
+            log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
+            accelerator.wait_for_everyone()
+            save_dir = os.path.join(args.save_dir, f"step_{step}")
+            accelerator.save_state(save_dir)
+            # if accelerator.is_main_process:
+            #     hf_repo.push_to_hub(commit_message=f"step {step}")
+            model.train()
+        if completed_steps >= args.max_train_steps:
+            break
 
-# Evaluate and save the last checkpoint
-logger.info("Evaluating and saving model after training")
-eval_loss, perplexity = evaluate(args)
-log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
-accelerator.wait_for_everyone()
-unwrapped_model = accelerator.unwrap_model(model)
-unwrapped_model.save_pretrained(args.save_dir, save_function=accelerator.save)
-save_dir = os.path.join(args.save_dir, f"step_{step}")
-accelerator.save_state(save_dir)
-if accelerator.is_main_process:
-    hf_repo.push_to_hub(commit_message="final model")
+    # Evaluate and save the last checkpoint
+    logger.info("Evaluating and saving model after training")
+    eval_loss, perplexity = evaluate(args)
+    log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
+    accelerator.wait_for_everyone()
+    unwrapped_model = accelerator.unwrap_model(model)
+    unwrapped_model.save_pretrained(args.save_dir, save_function=accelerator.save)
+    save_dir = os.path.join(args.save_dir, f"step_{step}")
+    accelerator.save_state(save_dir)
+    if accelerator.is_main_process:
+        hf_repo.push_to_hub(commit_message="final model")
