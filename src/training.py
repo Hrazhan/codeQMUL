@@ -325,3 +325,8 @@ def main():
     accelerator.save_state(save_dir)
     if accelerator.is_main_process:
         hf_repo.push_to_hub(commit_message="final model")
+
+
+
+if __name__ == "__main__":
+    main()
