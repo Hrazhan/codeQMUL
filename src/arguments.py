@@ -59,7 +59,7 @@ class EvaluationArguments:
     """
 
     model_ckpt: Optional[str] = field(
-        default="./codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
+        default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
     )
     dataset_name: Optional[str] = field(
         default="razhan/code-valid", metadata={"help": "Name or path of validation dataset."}
@@ -81,7 +81,7 @@ class HumanEvalArguments:
     model_ckpt: Optional[str] = field(
         default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
     )
-    num_workers: Optional[int] = field(default=None, metadata={"help": "Number of workers used for code evaluation."})
+    num_workers: Optional[int] = field(default=8, metadata={"help": "Number of workers used for code evaluation."})
     num_tasks: Optional[int] = field(
         default=None,
         metadata={"help": "The number of human-eval tasks to run. If not included all tasks are evaluated."},
@@ -97,7 +97,7 @@ class HumanEvalArguments:
     n_samples: Optional[int] = field(
         default=200, metadata={"help": "Number of completions to generate for each sample."}
     )
-    seed: Optional[int] = field(default=1, metadata={"help": "Random seed used for evaluation."})
+    seed: Optional[int] = field(default=42, metadata={"help": "Random seed used for evaluation."})
     output_file: Optional[str] = field(
         default="eval_results.json", metadata={"help": "Random seed used for evaluation."}
     )
@@ -105,7 +105,7 @@ class HumanEvalArguments:
         default="0", metadata={"help": "Allow `code_eval` to execute Python code on machine"}
     )
     device_int: Optional[int] = field(
-        default=-1,
+        default=0,
         metadata={
             "help": (
                 "Determine which device to run the `text-generation` Pipeline on. -1 is CPU and any zero or positive"
