@@ -40,7 +40,6 @@ class ConstantLengthDataset(IterableDataset):
         seq_length=1024,
         num_of_sequences=1024,
         chars_per_token=3.6,
-        tokenized=False,
     ):
         self.tokenizer = tokenizer
         self.concat_token_id = tokenizer.bos_token_id
@@ -49,14 +48,8 @@ class ConstantLengthDataset(IterableDataset):
         self.epoch = 0
         self.infinite = infinite
         self.current_size = 0
-        self.tokenized = tokenized
-
-        if self.tokenized:
-            self.max_buffer_size = seq_length * num_of_sequences
-            self.content_field = "input_ids"
-        else:
-            self.max_buffer_size = seq_length * chars_per_token * num_of_sequences
-            self.content_field = "content"
+        self.max_buffer_size = seq_length * chars_per_token * num_of_sequences
+        self.content_field = "content"
 
     def __iter__(self):
         iterator = iter(self.dataset)
@@ -77,10 +70,8 @@ class ConstantLengthDataset(IterableDataset):
                     else:
                         more_examples = False
                         break
-            if self.tokenized:
-                tokenized_inputs = buffer
-            else:
-                tokenized_inputs = self.tokenizer(buffer, truncation=False)["input_ids"]
+           
+            tokenized_inputs = self.tokenizer(buffer, truncation=False)["input_ids"]
             all_token_ids = []
             for tokenized_input in tokenized_inputs:
                 all_token_ids.extend(tokenized_input + [self.concat_token_id])
@@ -126,10 +117,10 @@ def create_dataloaders(args):
     train_data = train_data.shuffle(buffer_size=args.shuffle_buffer, seed=args.seed)
     valid_data = load_dataset(args.dataset_name_valid, split="train", **ds_kwargs)
     train_dataset = ConstantLengthDataset(
-        tokenizer, train_data, infinite=True, seq_length=args.seq_length, tokenized=args.tokenized
+        tokenizer, train_data, infinite=True, seq_length=args.seq_length
     )
     valid_dataset = ConstantLengthDataset(
-        tokenizer, valid_data, infinite=False, seq_length=args.seq_length, tokenized=args.tokenized
+        tokenizer, valid_data, infinite=False, seq_length=args.seq_length
     )
     train_dataset = train_dataset.shuffle(buffer_size=args.shuffle_buffer)
     train_dataloader = DataLoader(train_dataset, batch_size=args.train_batch_size, shuffle=True)
@@ -190,143 +181,139 @@ def evaluate(args):
     return loss.item(), perplexity.item()
 
 
-def main():
-    # Settings
-    parser = HfArgumentParser(TrainingArguments)
-    args = parser.parse_args()
+# Settings
+parser = HfArgumentParser(TrainingArguments)
+args = parser.parse_args()
 
-    # Accelerator
-    accelerator = Accelerator(log_with=["wandb", "tensorboard"], logging_dir=f"{args.save_dir}/log")
-    acc_state = {str(k): str(v) for k, v in accelerator.state.__dict__.items()}
+# Accelerator
+accelerator = Accelerator(log_with=["wandb", "tensorboard"], logging_dir=f"{args.save_dir}/log")
+acc_state = {str(k): str(v) for k, v in accelerator.state.__dict__.items()}
 
-    args = Namespace(**vars(args), **acc_state)
-    samples_per_step = accelerator.state.num_processes * args.train_batch_size
-    set_seed(args.seed)
+args = Namespace(**vars(args), **acc_state)
+samples_per_step = accelerator.state.num_processes * args.train_batch_size
+set_seed(args.seed)
 
-    # Clone model repository
-    if accelerator.is_main_process:
-        hf_repo = Repository(args.save_dir, clone_from=args.model_ckpt)
+# Clone model repository
+if accelerator.is_main_process:
+    hf_repo = Repository(args.save_dir, clone_from=args.model_ckpt)
 
-    # Logging
-    logger, run_name = setup_logging(args)
-    logger.info(accelerator.state)
+# Logging
+logger, run_name = setup_logging(args)
+logger.info(accelerator.state)
 
-    # Checkout new branch on repo
-    if accelerator.is_main_process:
-        hf_repo.git_checkout(run_name, create_branch_ok=True)
+# Checkout new branch on repo
+if accelerator.is_main_process:
+    hf_repo.git_checkout(run_name, create_branch_ok=True)
 
-    # Load model and tokenizer
-    model = AutoModelForCausalLM.from_pretrained(args.save_dir)
-    if args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-    tokenizer = AutoTokenizer.from_pretrained(args.save_dir)
+# Load model and tokenizer
+model = AutoModelForCausalLM.from_pretrained(args.save_dir)
+if args.gradient_checkpointing:
+    model.gradient_checkpointing_enable()
+tokenizer = AutoTokenizer.from_pretrained(args.save_dir)
 
-    # Load dataset and dataloader
-    train_dataloader, eval_dataloader = create_dataloaders(args)
+# Load dataset and dataloader
+train_dataloader, eval_dataloader = create_dataloaders(args)
 
-    # Prepare the optimizer and learning rate scheduler
-    optimizer = AdamW(get_grouped_params(model, args), lr=args.learning_rate)
-    lr_scheduler = get_scheduler(
-        name=args.lr_scheduler_type,
-        optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps,
-        num_training_steps=args.max_train_steps,
-    )
-    accelerator.register_for_checkpointing(lr_scheduler)
-
-
-    def get_lr():
-        return optimizer.param_groups[0]["lr"]
+# Prepare the optimizer and learning rate scheduler
+optimizer = AdamW(get_grouped_params(model, args), lr=args.learning_rate)
+lr_scheduler = get_scheduler(
+    name=args.lr_scheduler_type,
+    optimizer=optimizer,
+    num_warmup_steps=args.num_warmup_steps,
+    num_training_steps=args.max_train_steps,
+)
+accelerator.register_for_checkpointing(lr_scheduler)
 
 
-    # Prepare everything with our `accelerator`.
-    model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
-        model, optimizer, train_dataloader, eval_dataloader
-    )
+def get_lr():
+    return optimizer.param_groups[0]["lr"]
 
-    # load in the weights and states from a previous save
-    if args.resume_from_checkpoint:
-        if args.resume_from_checkpoint is not None or args.resume_from_checkpoint != "":
-            accelerator.print(f"Resumed from checkpoint: {args.resume_from_checkpoint}")
-            accelerator.load_state(args.resume_from_checkpoint)
-            path = os.path.basename(args.resume_from_checkpoint)
-        else:
-            # Get the most recent checkpoint
-            dirs = [f.name for f in os.scandir(args.save_dir) if f.is_dir() and "step" in str(f)]
-            dirs.sort(key=os.path.getctime)
-            path = dirs[-1]  # Sorts folders by date modified, most recent checkpoint is the last
-        # Extract the step of the checkpoint to continue from there
-        training_difference = os.path.splitext(path)[0]
-        resume_step = int(training_difference.replace("step_", ""))
 
-    # Train model
-    model.train()
-    completed_steps = 0
-    t_start = time.time()
-    loss_tracking = 0
-    for step, batch in enumerate(train_dataloader, start=1):
-        if args.resume_from_checkpoint and step < resume_step:
-            continue  # we need to skip steps until we reach the resumed step
-        loss = model(batch, labels=batch, use_cache=False).loss
-        avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
-        loss_tracking += avg_loss.item() / args.gradient_accumulation_steps
-        log_metrics(step, {"samples": step * samples_per_step, "loss_per_step/train": loss.item()})
-        loss = loss / args.gradient_accumulation_steps
-        if step % args.gradient_accumulation_steps != 0:
-            # Prevent backward from doing gradient all_reduce in every step
-            if accelerator.distributed_type == DistributedType.MULTI_GPU:
-                with model.no_sync():
-                    accelerator.backward(loss)
-            else:
+# Prepare everything with our `accelerator`.
+model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
+    model, optimizer, train_dataloader, eval_dataloader
+)
+
+# load in the weights and states from a previous save
+if args.resume_from_checkpoint:
+    if args.resume_from_checkpoint is not None or args.resume_from_checkpoint != "":
+        accelerator.print(f"Resumed from checkpoint: {args.resume_from_checkpoint}")
+        accelerator.load_state(args.resume_from_checkpoint)
+        path = os.path.basename(args.resume_from_checkpoint)
+    else:
+        # Get the most recent checkpoint
+        dirs = [f.name for f in os.scandir(args.save_dir) if f.is_dir() and "step" in str(f)]
+        dirs.sort(key=os.path.getctime)
+        path = dirs[-1]  # Sorts folders by date modified, most recent checkpoint is the last
+    # Extract the step of the checkpoint to continue from there
+    training_difference = os.path.splitext(path)[0]
+    resume_step = int(training_difference.replace("step_", ""))
+
+# Train model
+model.train()
+completed_steps = 0
+t_start = time.time()
+loss_tracking = 0
+for step, batch in enumerate(train_dataloader, start=1):
+    if args.resume_from_checkpoint and step < resume_step:
+        continue  # we need to skip steps until we reach the resumed step
+    loss = model(batch, labels=batch, use_cache=False).loss
+    avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
+    loss_tracking += avg_loss.item() / args.gradient_accumulation_steps
+    log_metrics(step, {"samples": step * samples_per_step, "loss_per_step/train": loss.item()})
+    loss = loss / args.gradient_accumulation_steps
+    if step % args.gradient_accumulation_steps != 0:
+        # Prevent backward from doing gradient all_reduce in every step
+        if accelerator.distributed_type == DistributedType.MULTI_GPU:
+            with model.no_sync():
                 accelerator.backward(loss)
         else:
-            lr = get_lr()
             accelerator.backward(loss)
-            accelerator.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
-            elapsed_time = time.time() - t_start
-            tflops = compute_tflops(elapsed_time, accelerator, args)
-            log_metrics(
-                step,
-                {
-                    "steps": completed_steps,
-                    "loss/train": loss_tracking,
-                    "lr": lr,
-                    "tflops": tflops,
-                    "time_per_iteration": elapsed_time,
-                },
-            )
-            t_start = time.time()
-            loss_tracking = 0
-            completed_steps += 1
-        if step % args.save_checkpoint_steps == 0:
-            logger.info("Evaluating and saving model checkpoint")
-            eval_loss, perplexity = evaluate(args)
-            log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
-            accelerator.wait_for_everyone()
-            save_dir = os.path.join(args.save_dir, f"step_{step}")
-            accelerator.save_state(save_dir)
-            # if accelerator.is_main_process:
-            #     hf_repo.push_to_hub(commit_message=f"step {step}")
-            model.train()
-        if completed_steps >= args.max_train_steps:
-            break
+    else:
+        lr = get_lr()
+        accelerator.backward(loss)
+        accelerator.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        lr_scheduler.step()
+        optimizer.zero_grad()
+        elapsed_time = time.time() - t_start
+        tflops = compute_tflops(elapsed_time, accelerator, args)
+        log_metrics(
+            step,
+            {
+                "steps": completed_steps,
+                "loss/train": loss_tracking,
+                "lr": lr,
+                "tflops": tflops,
+                "time_per_iteration": elapsed_time,
+            },
+        )
+        t_start = time.time()
+        loss_tracking = 0
+        completed_steps += 1
+    if step % args.save_checkpoint_steps == 0:
+        logger.info("Evaluating and saving model checkpoint")
+        eval_loss, perplexity = evaluate(args)
+        log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
+        accelerator.wait_for_everyone()
+        save_dir = os.path.join(args.save_dir, f"step_{step}")
+        accelerator.save_state(save_dir)
+        # if accelerator.is_main_process:
+        #     hf_repo.push_to_hub(commit_message=f"step {step}")
+        model.train()
+    if completed_steps >= args.max_train_steps:
+        break
 
-    # Evaluate and save the last checkpoint
-    logger.info("Evaluating and saving model after training")
-    eval_loss, perplexity = evaluate(args)
-    log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
-    accelerator.wait_for_everyone()
-    unwrapped_model = accelerator.unwrap_model(model)
-    unwrapped_model.save_pretrained(args.save_dir, save_function=accelerator.save)
-    save_dir = os.path.join(args.save_dir, f"step_{step}")
-    accelerator.save_state(save_dir)
-    if accelerator.is_main_process:
-        hf_repo.push_to_hub(commit_message="final model")
+# Evaluate and save the last checkpoint
+logger.info("Evaluating and saving model after training")
+eval_loss, perplexity = evaluate(args)
+log_metrics(step, {"loss/eval": eval_loss, "perplexity": perplexity})
+accelerator.wait_for_everyone()
+unwrapped_model = accelerator.unwrap_model(model)
+unwrapped_model.save_pretrained(args.save_dir, save_function=accelerator.save)
+save_dir = os.path.join(args.save_dir, f"step_{step}")
+accelerator.save_state(save_dir)
+if accelerator.is_main_process:
+    hf_repo.push_to_hub(commit_message="final model")
 
 
-
-if __name__ == "__main__":
-    main()

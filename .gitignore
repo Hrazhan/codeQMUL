@@ -129,3 +129,6 @@ ui-tests/playwright-report
 
 # data
 data
+wandb
+codeqmul
+model

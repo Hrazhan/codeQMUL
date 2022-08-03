@@ -1,3 +1,3 @@
 ## CodeQMUL
 
-Code generation based on gpt-2
+Code generation based on gpt-neo-125

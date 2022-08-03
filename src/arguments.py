@@ -5,7 +5,7 @@ from typing import Optional
 @dataclass
 class TrainingArguments:
     """
-    Configuration for training model.
+    Training Arguments
     """
 
     model_ckpt: Optional[str] = field(
@@ -15,10 +15,10 @@ class TrainingArguments:
         default="./codeqmul", metadata={"help": "Save dir where model repo is cloned and models updates are saved to."}
     )
     dataset_name_train: Optional[str] = field(
-        default="codeparrot/codeparrot-train-more-filtering", metadata={"help": "Name or path of training dataset."}
+        default="razhan/code-train", metadata={"help": "Name or path of training dataset."}
     )
     dataset_name_valid: Optional[str] = field(
-        default="codeparrot/codeparrot-valid-more-filtering", metadata={"help": "Name or path of validation dataset."}
+        default="razhan/code-valid", metadata={"help": "Name or path of validation dataset."}
     )
     train_batch_size: Optional[int] = field(default=1, metadata={"help": "Batch size for training."})
     valid_batch_size: Optional[int] = field(default=1, metadata={"help": "Batch size for evaluation."})
@@ -29,7 +29,7 @@ class TrainingArguments:
     learning_rate: Optional[float] = field(default=1.8e-4, metadata={"help": "Learning rate fo training."})
     lr_scheduler_type: Optional[str] = field(default="cosine", metadata={"help": "Learning rate."})
     num_warmup_steps: Optional[int] = field(
-        default=1500, metadata={"help": "Number of warmup steps in the learning rate schedule."}
+        default=750, metadata={"help": "Number of warmup steps in the learning rate schedule."}
     )
     gradient_accumulation_steps: Optional[int] = field(
         default=16, metadata={"help": "Number of gradient accumulation steps."}
@@ -37,20 +37,19 @@ class TrainingArguments:
     gradient_checkpointing: Optional[bool] = field(
         default=False, metadata={"help": "Use gradient checkpointing to reduce memory footprint."}
     )
-    max_train_steps: Optional[int] = field(default=150000, metadata={"help": "Maximum number of training steps."})
+    max_train_steps: Optional[int] = field(default=200000, metadata={"help": "Maximum number of training steps."})
     max_eval_steps: Optional[int] = field(
         default=-1, metadata={"help": "Maximum number of evaluation steps. If -1 the full dataset is evaluated."}
     )
-    seq_length: Optional[int] = field(default=1024, metadata={"help": "Sequence lengths used for training."})
-    seed: Optional[int] = field(default=1, metadata={"help": "Training seed."})
+    seq_length: Optional[int] = field(default=2048, metadata={"help": "Sequence lengths used for training."})
+    seed: Optional[int] = field(default=42, metadata={"help": "Training seed."})
     save_checkpoint_steps: Optional[int] = field(
-        default=15360,
+        default=200000,
         metadata={"help": "Interval to save checkpoints. Measured as number of forward passes not training steps."},
     )
     resume_from_checkpoint: Optional[str] = field(
         default=None, metadata={"help": "States path if the training should continue from a checkpoint folder."}
     )
-    tokenized: Optional[bool] = field(default=False, metadata={"help": "If True the data is pretokenized."})
 
 
 @dataclass
@@ -60,16 +59,16 @@ class EvaluationArguments:
     """
 
     model_ckpt: Optional[str] = field(
-        default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
+        default="./codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
     )
     dataset_name: Optional[str] = field(
-        default="codeparrot/codeparrot-valid-more-filtering", metadata={"help": "Name or path of validation dataset."}
+        default="razhan/code-valid", metadata={"help": "Name or path of validation dataset."}
     )
     batch_size: Optional[int] = field(default=2, metadata={"help": "Batch size used for evaluation."})
     max_eval_steps: Optional[int] = field(
         default=-1, metadata={"help": "Maximum number of evaluation steps. If -1 the full dataset is evaluated."}
     )
-    seq_length: Optional[int] = field(default=1024, metadata={"help": "Length of sequences to be evaluated."})
+    seq_length: Optional[int] = field(default=2048, metadata={"help": "Length of sequences to be evaluated."})
     seed: Optional[int] = field(default=1, metadata={"help": "Random seed used for evaluation."})
 
 
@@ -172,15 +171,15 @@ class TokenizerTrainingArguments:
     """
 
     base_tokenizer: Optional[str] = field(
-        default="gpt2", metadata={"help": "Base tokenizer to build new tokenizer from."}
+        default="EleutherAI/gpt-neo-1.3B", metadata={"help": "Base tokenizer to build new tokenizer from."}
     )
     dataset_name: Optional[str] = field(
-        default="codeparrot/codeparrot-train-more-filtering", metadata={"help": "Dataset to train tokenizer on."}
+        default="razhan/code-train", metadata={"help": "Dataset to train tokenizer on."}
     )
     text_column: Optional[str] = field(default="content", metadata={"help": "Column containing text data to process."})
-    vocab_size: Optional[int] = field(default=300_000, metadata={"help": "Number of examples to train tokenizer on."})
+    vocab_size: Optional[int] = field(default=200_000, metadata={"help": "Number of examples to train tokenizer on."})
     n_examples: Optional[int] = field(
-        default=50257, metadata={"help": "Number of examples to train the tokenizer on."}
+        default=32768, metadata={"help": "Number of examples to train the tokenizer on."}
     )
     tokenizer_name: Optional[str] = field(default="codeqmul", metadata={"help": "Name of new tokenizer."})
     push_to_hub: Optional[bool] = field(default=True, metadata={"help": "Push saved tokenizer to the hub."})
@@ -189,11 +188,11 @@ class TokenizerTrainingArguments:
 @dataclass
 class InitializationArguments:
     """
-    Configuration for initializing new model.
+    Initilization config, so we can train the model on a different server
     """
 
     config_name: Optional[str] = field(
-        default="distilgpt2", metadata={"help": "Configuration to use for model initialization."}
+        default="EleutherAI/gpt-neo-125M", metadata={"help": "Configuration to use for model initialization."}
     )
     tokenizer_name: Optional[str] = field(
         default="razhan/codeqmul", metadata={"help": "Tokenizer attached to model."}
