@@ -75,34 +75,23 @@ class EvaluationArguments:
 @dataclass
 class HumanEvalArguments:
     """
-    Configuration for running evaluation on HumanEval dataset.
+    Configuration for HumanEval dataset.
     """
 
     model_ckpt: Optional[str] = field(
         default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
     )
-    num_workers: Optional[int] = field(default=8, metadata={"help": "Number of workers used for code evaluation."})
-    num_tasks: Optional[int] = field(
+    num_completions: Optional[int] = field(
         default=None,
-        metadata={"help": "The number of human-eval tasks to run. If not included all tasks are evaluated."},
-    )
-    do_sample: Optional[bool] = field(
-        default=True, metadata={"help": "Sample from the language model's output distribution."}
+        metadata={"help": "The number of solutions to be generated."},
     )
     temperature: Optional[float] = field(default=0.2, metadata={"help": "Sampling temperature used for generation."})
     max_new_tokens: Optional[int] = field(default=256, metadata={"help": "Maximum number of newly generated tokens."})
     top_k: Optional[int] = field(default=0, metadata={"help": "Top-k parameter used for generation."})
     top_p: Optional[float] = field(default=0.95, metadata={"help": "Top-p parameter used for nucleus sampling."})
-    batch_size: Optional[int] = field(default=10, metadata={"help": "Number of generations to run in parallel."})
-    n_samples: Optional[int] = field(
-        default=200, metadata={"help": "Number of completions to generate for each sample."}
-    )
-    seed: Optional[int] = field(default=42, metadata={"help": "Random seed used for evaluation."})
-    output_file: Optional[str] = field(
-        default="eval_results.json", metadata={"help": "Random seed used for evaluation."}
-    )
-    HF_ALLOW_CODE_EVAL: Optional[str] = field(
-        default="0", metadata={"help": "Allow `code_eval` to execute Python code on machine"}
+    
+    output_dir: Optional[str] = field(
+        default="./results", metadata={"help": "Output directory"}
     )
     device_int: Optional[int] = field(
         default=0,
@@ -128,10 +117,10 @@ class PreprocessingArguments:
         },
     )
     dataset_name: Optional[str] = field(
-        default="codeparrot/codeparrot-valid-more-filtering", metadata={"help": "Folder or name of dataset to process."}
+        default="razhan/codeqmul-train", metadata={"help": "Folder or name of dataset to process."}
     )
     output_dir: Optional[str] = field(
-        default="codeparrot-clean", metadata={"help": "Folder to save processed processed dataset."}
+        default="code-clean", metadata={"help": "Folder to save processed processed dataset."}
     )
     samples_per_file: Optional[int] = field(
         default=100_000, metadata={"help": "Number of files to save per JSON output file."}
