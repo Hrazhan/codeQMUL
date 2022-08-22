@@ -59,17 +59,17 @@ class EvaluationArguments:
     """
 
     model_ckpt: Optional[str] = field(
-        default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
+        default="razhan/PyNeo", metadata={"help": "Model name or path of model to be evaluated."}
     )
     dataset_name: Optional[str] = field(
         default="razhan/code-valid", metadata={"help": "Name or path of validation dataset."}
     )
     batch_size: Optional[int] = field(default=2, metadata={"help": "Batch size used for evaluation."})
     max_eval_steps: Optional[int] = field(
-        default=-1, metadata={"help": "Maximum number of evaluation steps. If -1 the full dataset is evaluated."}
+        default=200, metadata={"help": "Maximum number of evaluation steps. If -1 the full dataset is evaluated."}
     )
     seq_length: Optional[int] = field(default=2048, metadata={"help": "Length of sequences to be evaluated."})
-    seed: Optional[int] = field(default=1, metadata={"help": "Random seed used for evaluation."})
+    seed: Optional[int] = field(default=42, metadata={"help": "Random seed used for evaluation."})
 
 
 @dataclass
@@ -79,7 +79,7 @@ class HumanEvalArguments:
     """
 
     model_ckpt: Optional[str] = field(
-        default="razhan/codeqmul", metadata={"help": "Model name or path of model to be evaluated."}
+        default="razhan/PyNeo", metadata={"help": "Model name or path of model to be evaluated."}
     )
     num_completions: Optional[int] = field(
         default=None,
@@ -117,7 +117,7 @@ class PreprocessingArguments:
         },
     )
     dataset_name: Optional[str] = field(
-        default="razhan/codeqmul-train", metadata={"help": "Folder or name of dataset to process."}
+        default="razhan/code-train", metadata={"help": "Folder or name of dataset to process."}
     )
     output_dir: Optional[str] = field(
         default="code-clean", metadata={"help": "Folder to save processed processed dataset."}
@@ -142,7 +142,7 @@ class PreprocessingArguments:
         default=0.7, metadata={"help": "Probability for filtering config, test and uncommon files."}
     )
     tokenizer: Optional[str] = field(
-        default="razhan/codeQMUL",
+        default="razhan/PyNeo",
         metadata={"help": "Name or path to the tokenizer."},
     )
     near_deduplication: Optional[bool] = field(
@@ -170,7 +170,7 @@ class TokenizerTrainingArguments:
     n_examples: Optional[int] = field(
         default=32768, metadata={"help": "Number of examples to train the tokenizer on."}
     )
-    tokenizer_name: Optional[str] = field(default="codeqmul", metadata={"help": "Name of new tokenizer."})
+    tokenizer_name: Optional[str] = field(default="PyNeo", metadata={"help": "Name of new tokenizer."})
     push_to_hub: Optional[bool] = field(default=True, metadata={"help": "Push saved tokenizer to the hub."})
 
 
@@ -184,7 +184,7 @@ class InitializationArguments:
         default="EleutherAI/gpt-neo-125M", metadata={"help": "Configuration to use for model initialization."}
     )
     tokenizer_name: Optional[str] = field(
-        default="razhan/codeqmul", metadata={"help": "Tokenizer attached to model."}
+        default="razhan/PyNeo", metadata={"help": "Tokenizer attached to model."}
     )
-    model_name: Optional[str] = field(default="codeqmul", metadata={"help": "Name of the created model."})
+    model_name: Optional[str] = field(default="PyNeo", metadata={"help": "Name of the created model."})
     push_to_hub: Optional[bool] = field(default=True, metadata={"help": "Push saved tokenizer to the hub."})
