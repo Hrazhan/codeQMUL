@@ -12,7 +12,7 @@ class TrainingArguments:
         default="razhan/PyNeo", metadata={"help": "Model name or path of model to be trained."}
     )
     save_dir: Optional[str] = field(
-        default="./PyNeo", metadata={"help": "Save dir where model repo is cloned and models updates are saved to."}
+        default="PyNeo", metadata={"help": "Save dir where model repo is cloned and models updates are saved to."}
     )
     dataset_name_train: Optional[str] = field(
         default="razhan/code-train", metadata={"help": "Name or path of training dataset."}
@@ -20,8 +20,8 @@ class TrainingArguments:
     dataset_name_valid: Optional[str] = field(
         default="razhan/code-valid", metadata={"help": "Name or path of validation dataset."}
     )
-    train_batch_size: Optional[int] = field(default=2, metadata={"help": "Batch size for training."})
-    valid_batch_size: Optional[int] = field(default=2, metadata={"help": "Batch size for evaluation."})
+    train_batch_size: Optional[int] = field(default=1, metadata={"help": "Batch size for training."})
+    valid_batch_size: Optional[int] = field(default=1, metadata={"help": "Batch size for evaluation."})
     weight_decay: Optional[float] = field(default=0.1, metadata={"help": "Value of weight decay."})
     shuffle_buffer: Optional[int] = field(
         default=10000, metadata={"help": "Size of buffer used to shuffle streaming dataset."}
@@ -166,9 +166,9 @@ class TokenizerTrainingArguments:
         default="razhan/code-train", metadata={"help": "Dataset to train tokenizer on."}
     )
     text_column: Optional[str] = field(default="content", metadata={"help": "Column containing text data to process."})
-    vocab_size: Optional[int] = field(default=200_000, metadata={"help": "Number of examples to train tokenizer on."})
+    vocab_size: Optional[int] = field(default=32000, metadata={"help": "Number of examples to train tokenizer on."})
     n_examples: Optional[int] = field(
-        default=32768, metadata={"help": "Number of examples to train the tokenizer on."}
+        default=200000, metadata={"help": "Number of examples to train the tokenizer on."}
     )
     tokenizer_name: Optional[str] = field(default="PyNeo", metadata={"help": "Name of new tokenizer."})
     push_to_hub: Optional[bool] = field(default=True, metadata={"help": "Push saved tokenizer to the hub."})

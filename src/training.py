@@ -107,7 +107,7 @@ def setup_logging(args):
         run_name = ""
         logger.setLevel(logging.ERROR)
         datasets.utils.logging.set_verbosity_error()
-        transformers.utils.logging.set_verbosity_error()
+        transformers.utils.logging.seta_verbosity_error()
     return logger, run_name
 
 
@@ -152,11 +152,11 @@ def compute_tflops(elapsed_time, accelerator, args):
     config_model = accelerator.unwrap_model(model).config
     checkpoint_factor = 4 if args.gradient_checkpointing else 3
     batch_size = args.train_batch_size * accelerator.state.num_processes * args.gradient_accumulation_steps
-    factor = 24 * checkpoint_factor * batch_size * args.seq_length * config_model.n_layer * (config_model.n_embd**2)
+    factor = 24 * checkpoint_factor * batch_size * args.seq_length * config_model.num_layers * (config_model.hidden_size**2)
     flops_per_iteration = factor * (
         1.0
-        + (args.seq_length / (6.0 * config_model.n_embd))
-        + (tokenizer.vocab_size / (16.0 * config_model.n_layer * config_model.n_embd))
+        + (args.seq_length / (6.0 * config_model.hidden_size))
+        + (tokenizer.vocab_size / (16.0 * config_model.num_layers * config_model.hidden_size))
     )
     tflops = flops_per_iteration / (elapsed_time * accelerator.state.num_processes * (10**12))
     return tflops
